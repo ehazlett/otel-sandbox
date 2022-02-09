@@ -1,0 +1,29 @@
+version: "2"
+services:
+
+  # Jaeger
+  #  jaeger-all-in-one:
+  #    image: jaegertracing/all-in-one:latest
+  #    network_mode: host
+
+  # Zipkin
+  zipkin-all-in-one:
+    image: openzipkin/zipkin:latest
+    network_mode: host
+
+  # Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib-dev:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    network_mode: host
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    depends_on:
+      - zipkin-all-in-one
+
+  prometheus:
+    container_name: prometheus
+    network_mode: host
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml
