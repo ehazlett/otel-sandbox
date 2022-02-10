@@ -1,6 +1,8 @@
 # OpenTelemetry Sandbox
 This repo contains configuration to standup a full stack for receiving OpenTelemetry data.
 
+![Demo](.images/demo.png)
+
 # Usage
 There are two ways to launch the full stack: Docker and Kubernetes
 
@@ -10,7 +12,11 @@ To launch a local stack using Docker, run `docker compose up` from within the `d
 ## Kubernetes
 To launch a standalone mode stack using Kubernetes, run `kubectl apply -f stack.yaml` from within the `k8s` directory.
 
+Note: this is a single deployment that is fully contained. For a production deployment, you will want to
+split these out into their own deployments / services.
+
 # Components
+
 ## InfluxDB
 This is an InfluxDB instance for viewing metric data.
 

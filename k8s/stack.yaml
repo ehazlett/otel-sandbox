@@ -186,6 +186,20 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: otel-tempo
+  labels:
+    app: otel
+spec:
+  selector:
+    app: otel
+  ports:
+    - name: app
+      port: 3200
+      targetPort: tempo-http
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: otel-prom
   labels:
     app: otel
