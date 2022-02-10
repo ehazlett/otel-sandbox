@@ -36,8 +36,8 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [logging, otlp/tempo, otlp/telegraf]
+      exporters: [logging, otlp/telegraf, otlp/tempo]
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [logging, prometheus]
+      exporters: [logging, prometheus, otlp/telegraf, otlp/tempo]
