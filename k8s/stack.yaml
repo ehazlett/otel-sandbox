@@ -1,0 +1,212 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel
+  labels:
+    app: otel
+spec:
+  selector:
+    matchLabels:
+      app: otel
+  template:
+    metadata:
+      labels:
+        app: otel
+    spec:
+      containers:
+      - name: tempo
+        image: grafana/tempo:latest
+        command: ["/tempo", "-config.file", "/etc/tempo.conf"]
+        ports:
+          - containerPort: 3200
+            name: tempo-http
+          - containerPort: 14317
+            name: tempo-otel
+        volumeMounts:
+          - name: tempo-config
+            mountPath: /etc/tempo.conf
+            subPath: tempo.conf
+      - name: grafana
+        image: grafana/grafana:latest
+        env:
+          - name: GF_FEATURE_TOGGLES_ENABLE
+            value: "tempoSearch"
+        ports:
+          - containerPort: 3000
+            name: grafana-http
+      - name: otel
+        image: otel/opentelemetry-collector-contrib-dev:latest
+        ports:
+          - containerPort: 4317
+            name: otel-grpc
+          - containerPort: 4318
+            name: otel-http
+        volumeMounts:
+          - name: otel-config
+            mountPath: /etc/otel
+      - name: prom
+        image: prom/prometheus:latest
+        ports:
+          - containerPort: 9090
+            name: prom
+        volumeMounts:
+          - name: prom-config
+            mountPath: /etc/prometheus/prometheus.yml
+            subPath: prometheus.yml
+      volumes:
+        - name: otel-config
+          configMap:
+            name: otel-config
+        - name: prom-config
+          configMap:
+            name: prom-config
+        - name: tempo-config
+          configMap:
+            name: tempo-config
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-config
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    exporters:
+      otlp/tempo:
+        endpoint: "127.0.0.1:14317"
+        tls:
+          insecure: true
+      otlp/watchtower:
+        endpoint: "watchtower:4317"
+        tls:
+          insecure: true
+      otlp/telegraf:
+        endpoint: "127.0.0.1:24317"
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+
+      logging:
+
+    processors:
+      batch:
+
+    extensions:
+      health_check:
+      pprof:
+        endpoint: :1888
+      zpages:
+        endpoint: :55679
+
+    service:
+      extensions: [pprof, zpages, health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [logging, otlp/tempo, otlp/telegraf, otlp/watchtower]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [logging, prometheus]
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prom-config
+data:
+  prometheus.yml: |
+    scrape_configs:
+      - job_name: 'otel-collector'
+        scrape_interval: 5s
+        static_configs:
+          - targets: ['127.0.0.1:8889']
+          - targets: ['127.0.0.1:8888']
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-config
+data:
+  tempo.conf: |
+    server:
+      http_listen_port: 3200
+    search_enabled: true
+    distributor:
+      log_received_traces: true
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:14317
+    compactor:
+      compaction:
+        compaction_window: 1h
+        block_retention: 172h
+        compacted_block_retention: 72h
+    ingester:
+      trace_idle_period: 172h
+      max_block_duration: 24h
+    storage:
+      trace:
+        backend: local
+        local:
+          path: /tmp/tempo
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel
+  labels:
+    app: otel
+spec:
+  selector:
+    app: otel
+  ports:
+    - name: grpc
+      port: 4317
+      targetPort: otel-grpc
+    - name: http
+      port: 4318
+      targetPort: otel-http
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-prom
+  labels:
+    app: otel
+spec:
+  selector:
+    app: otel
+  ports:
+    - name: app
+      port: 9090
+      targetPort: prom
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-grafana
+  labels:
+    app: otel
+spec:
+  selector:
+    app: otel
+  ports:
+    - name: app
+      port: 3000
+      targetPort: grafana-http

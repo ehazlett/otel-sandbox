@@ -12,10 +12,16 @@ services:
     network_mode: host
 
   # Collector
-  otel-collector:
+  otel:
     image: otel/opentelemetry-collector-contrib-dev:latest
     command: ["--config=/etc/otel-collector-config.yaml"]
-    network_mode: host
+    ports:
+      - 1888:1888
+      - 4317:4317
+      - 4318:4318
+      - 8888:8888
+      - 8889:8889
+      - 55679:55679
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
     depends_on:
@@ -23,7 +29,8 @@ services:
 
   prometheus:
     container_name: prometheus
-    network_mode: host
     image: prom/prometheus:latest
+    ports:
+      - 9090:9090
     volumes:
       - ./prometheus.yaml:/etc/prometheus/prometheus.yml

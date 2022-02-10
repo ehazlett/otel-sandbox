@@ -14,6 +14,5 @@ services:
 
   telegraf:
     image: telegraf:latest
-    network_mode: host
     volumes:
       - ./telegraf.conf:/etc/telegraf/telegraf.conf
