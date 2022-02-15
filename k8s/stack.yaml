@@ -34,6 +34,35 @@ spec:
         ports:
           - containerPort: 3000
             name: grafana-http
+      - name: influxdb
+        image: influxdb:latest
+        env:
+          - name: DOCKER_INFLUXDB_INIT_MODE
+            value: "setup"
+          - name: DOCKER_INFLUXDB_INIT_USERNAME
+            value: "admin"
+          - name: DOCKER_INFLUXDB_INIT_PASSWORD
+            value: "influxadmin"
+          - name: DOCKER_INFLUXDB_INIT_ORG
+            value: "system"
+          - name: DOCKER_INFLUXDB_INIT_BUCKET
+            value: "default"
+          - name: DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
+            value: "secret-token"
+        ports:
+          - containerPort: 8086
+            name: influxdb
+      - name: jaeger
+        image: jaegertracing/all-in-one:1.31
+        ports:
+          - containerPort: 9411
+            name: jaeger-zipkin
+          - containerPort: 14250
+            name: jaeger-proto
+          - containerPort: 14268
+            name: jaeger-thrift
+          - containerPort: 16686
+            name: jaeger-ui
       - name: otel
         image: otel/opentelemetry-collector-contrib-dev:latest
         ports:
@@ -84,12 +113,17 @@ data:
         endpoint: "127.0.0.1:14317"
         tls:
           insecure: true
-      otlp/telegraf:
-        endpoint: "127.0.0.1:24317"
-        tls:
-          insecure: true
       prometheus:
         endpoint: "0.0.0.0:8889"
+      jaeger:
+        endpoint: "127.0.0.1:14250"
+        tls:
+          insecure: true
+      influxdb:
+        endpoint: "http://otel-influxdb:8086"
+        org: "system"
+        bucket: "default"
+        token: "secret-token"
 
       logging:
 
@@ -100,20 +134,18 @@ data:
       health_check:
       pprof:
         endpoint: :1888
-      zpages:
-        endpoint: :55679
 
     service:
-      extensions: [pprof, zpages, health_check]
+      extensions: [pprof, health_check]
       pipelines:
         traces:
           receivers: [otlp]
           processors: [batch]
-          exporters: [logging, otlp/tempo, otlp/telegraf]
+          exporters: [logging, otlp/tempo, influxdb]
         metrics:
           receivers: [otlp]
           processors: [batch]
-          exporters: [logging, prometheus]
+          exporters: [logging, prometheus, influxdb]
 
 ---
 apiVersion: v1
@@ -126,8 +158,7 @@ data:
       - job_name: 'otel-collector'
         scrape_interval: 5s
         static_configs:
-          - targets: ['127.0.0.1:8889']
-          - targets: ['127.0.0.1:8888']
+          - targets: ['127.0.0.1:8888', '127.0.0.1:8889']
 
 ---
 apiVersion: v1
@@ -192,6 +223,31 @@ spec:
     - name: app
       port: 3200
       targetPort: tempo-http
+    - name: otlp
+      port: 14317
+      targetPort: tempo-otel
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-jaeger
+  labels:
+    app: otel
+spec:
+  selector:
+    app: otel
+  ports:
+    - name: zipkin
+      port: 9411
+      targetPort: jaeger-zipkin
+    - name: proto
+      port: 14250
+      targetPort: jaeger-proto
+    - name: ui
+      port: 16686
+      targetPort: jaeger-ui
+
 ---
 apiVersion: v1
 kind: Service
@@ -220,3 +276,18 @@ spec:
     - name: app
       port: 3000
       targetPort: grafana-http
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-influxdb
+  labels:
+    app: otel
+spec:
+  selector:
+    app: otel
+  ports:
+    - name: app
+      port: 8086
+      targetPort: influxdb
