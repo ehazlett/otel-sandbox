@@ -49,7 +49,7 @@ services:
       - tempo
 
   otel:
-    image: otel/opentelemetry-collector-contrib-dev:latest
+    image: otel/opentelemetry-collector-contrib:0.50.0
     command: ["--config=/etc/otel-collector-config.yaml"]
     ports:
       - 1888:1888
